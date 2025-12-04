@@ -6,19 +6,24 @@ FROM golang:1.21-alpine AS builder
 WORKDIR /build
 
 # Copy go mod files
-COPY go.mod go.sum ./
-RUN go mod download
+COPY go.mod  go.sum ./
+
+RUN  go mod download  
 
 # Copy source code
 COPY . .
 
 # Build the binary
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o worker ./cmd/worker
+RUN CGO_ENABLED=0 GOOS=linux go build \
+    -ldflags="-w -s" \
+    -trimpath \
+    -o worker ./cmd/worker/
 
 # Final stage
 FROM alpine:latest
 
-RUN apk --no-cache add ca-certificates
+#   (CA certificates for HTTPS)
+RUN apk --no-cache add ca-certificates  #
 
 WORKDIR /app
 

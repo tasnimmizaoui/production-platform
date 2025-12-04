@@ -6,14 +6,17 @@ FROM golang:1.21-alpine AS builder
 WORKDIR /build
 
 # Copy go mod files
-COPY go.mod go.sum ./
+COPY go.mod  go.sum ./
 RUN go mod download
 
 # Copy source code
 COPY . .
 
 # Build the binary
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o api ./cmd/api
+RUN CGO_ENABLED=0 GOOS=linux go build \
+    -ldflags="-w -s" \
+    -trimpath \
+    -o api ./cmd/api/
 
 # Final stage
 FROM alpine:latest
