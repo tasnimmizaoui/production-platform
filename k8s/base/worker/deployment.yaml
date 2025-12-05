@@ -1,0 +1,88 @@
+# k8s/base/worker/deployment.yaml
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  namespace: production-platform
+  labels:
+    app: worker
+    component: processor
+    version: v1
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: worker
+  template:
+    metadata:
+      labels:
+        app: worker
+        component: processor
+        version: v1
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8081"
+        prometheus.io/path: "/metrics"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      
+      containers:
+      - name: worker
+        image: yourusername/production-platform-worker:latest
+        imagePullPolicy: Always
+        
+        ports:
+        - containerPort: 8081
+          name: http
+          protocol: TCP
+        
+        envFrom:
+        - configMapRef:
+            name: app-config
+        
+        env:
+        - name: PORT
+          value: "8081"
+        
+        # Worker resource allocation
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8081
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        
+        lifecycle:
+          preStop:
+            exec:
+              command: ["/bin/sh", "-c", "sleep 15"]
+      
+      terminationGracePeriodSeconds: 30

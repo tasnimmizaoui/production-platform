@@ -1,0 +1,20 @@
+# k8s/base/config/configmap.yaml  (i'll see with the location of the file later )
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: production-platform
+data:
+  # Redis configuration
+  REDIS_ADDR: "redis:6379"
+  
+  # API configuration
+  API_PORT: "8080"
+  
+  # Worker configuration
+  WORKER_PORT: "8081"
+  WORKER_POLL_INTERVAL: "2s"
+  
+  # Logging
+  LOG_LEVEL: "info"
+  LOG_FORMAT: "json"
