@@ -36,8 +36,9 @@ spec:
       
       containers:
       - name: api
-        image: tasnimmizaoui/production-platform-api:latest
-        imagePullPolicy: Always
+        image: production-platform-api:latest
+        imagePullPolicy: IfNotPresent
+                       # Always -> This tries to always Pull from DockerHub whil in my local dev nev i've built my images in the local minikube  
         
         ports:
         - containerPort: 8080

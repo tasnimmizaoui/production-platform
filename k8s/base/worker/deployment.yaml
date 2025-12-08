@@ -1,5 +1,3 @@
-# k8s/base/worker/deployment.yaml
-
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -37,9 +35,9 @@ spec:
       
       containers:
       - name: worker
-        image: yourusername/production-platform-worker:latest
-        imagePullPolicy: Always
-        
+        image: production-platform-worker:latest
+        imagePullPolicy: IfNotPresent
+                         # Always -> If i want to pull from Dockerhub 
         ports:
         - containerPort: 8081
           name: http
