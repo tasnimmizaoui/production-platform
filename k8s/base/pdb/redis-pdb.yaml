@@ -1,0 +1,13 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: redis-pdb
+  namespace: production-platform
+  annotations:
+    description: "Redis is stateful - only 1 pod can be down at a time"
+spec:
+  # For StatefulSet with 1 replica
+  maxUnavailable: 0  # No Redis downtime allowed!
+  selector:
+    matchLabels:
+      app: redis
