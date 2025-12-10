@@ -10,4 +10,7 @@ spec:
   maxUnavailable: 0  # No Redis downtime allowed!
   selector:
     matchLabels:
-      app: redis
+      app: redis 
+
+
+      

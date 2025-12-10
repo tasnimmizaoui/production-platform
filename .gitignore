@@ -1,5 +1,8 @@
 .vscode/
 phase1.md
 phase2.md
+phase3.md
 scripts/test-now.sh
 outputs.md 
+kubeconfig-dev.yaml
+scripts/generate-load.sh
