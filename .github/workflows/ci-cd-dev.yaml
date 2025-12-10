@@ -90,7 +90,11 @@ jobs:
         sudo install minikube-linux-amd64 /usr/local/bin/minikube
         
         # Start Minikube
-        minikube start --driver=docker
+        minikube start --driver=docker --force
+
+        # 3. Wait for cluster to be ready
+        echo "⏳ Waiting for Minikube to be ready..."
+        minikube status
         
         # Get kubeconfig
         mkdir -p ~/.kube
@@ -99,7 +103,7 @@ jobs:
     - name: Deploy to Minikube
       run: |
         # Apply your Kubernetes manifests recursively 
-        find k8s/ -name "*.yaml" -o -name "*.yml" | xargs -I {} kubectl apply -f {}
+        kubectl apply -f k8s/base/ --validate=false
         
         # Update images
         kubectl set image deployment/api \
