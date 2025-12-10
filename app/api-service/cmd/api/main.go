@@ -164,35 +164,49 @@ func corsMiddleware(next http.Handler) http.Handler {
 
 func healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"status": "healthy"})
+	if err := json.NewEncoder(w).Encode(map[string]string{"status": "healthy"}); err != nil {
+		log.Printf("Failed to encode health response: %v", err)
+	}
 }
 
 func readyHandler(w http.ResponseWriter, r *http.Request) {
 	// Check if Redis client is initialized
 	if redisClient == nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
-		json.NewEncoder(w).Encode(map[string]string{
+		if err := json.NewEncoder(w).Encode(map[string]string{
 			"status": "not ready",
 			"reason": "redis not initialized",
-		})
+		}); err != nil {
+			log.Printf("Failed to encode ready response: %v", err)
+		}
 		return
 	}
 
 	// Check Redis connection
 	if err := redisClient.Ping(ctx).Err(); err != nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
-		json.NewEncoder(w).Encode(map[string]string{
+		if err := json.NewEncoder(w).Encode(map[string]string{
 			"status": "not ready",
 			"reason": "redis unavailable",
-		})
+		}); err != nil {
+			log.Printf("Failed to encode ready response: %v", err)
+		}
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"status": "ready"})
+	if err := json.NewEncoder(w).Encode(map[string]string{"status": "ready"}); err != nil {
+		log.Printf("Failed to encode ready response: %v", err)
+	}
 }
 
 func createTaskHandler(w http.ResponseWriter, r *http.Request) {
+	// Check for nil Redis
+	if redisClient == nil {
+		http.Error(w, "Redis not available", http.StatusServiceUnavailable)
+		return
+	}
+
 	var req CreateTaskRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
@@ -212,7 +226,12 @@ func createTaskHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Store task in Redis
-	taskJSON, _ := json.Marshal(task)
+	taskJSON, err := json.Marshal(task)
+	if err != nil {
+		http.Error(w, "Failed to marshal task", http.StatusInternalServerError)
+		return
+	}
+
 	if err := redisClient.Set(ctx, "task:"+task.ID, taskJSON, 24*time.Hour).Err(); err != nil {
 		http.Error(w, "Failed to store task", http.StatusInternalServerError)
 		return
@@ -228,13 +247,21 @@ func createTaskHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(CreateTaskResponse{
+	if err := json.NewEncoder(w).Encode(CreateTaskResponse{
 		TaskID: task.ID,
 		Status: "pending",
-	})
+	}); err != nil {
+		log.Printf("Failed to encode task response: %v", err)
+	}
 }
 
 func getTaskHandler(w http.ResponseWriter, r *http.Request) {
+	// Check for nil Redis
+	if redisClient == nil {
+		http.Error(w, "Redis not available", http.StatusServiceUnavailable)
+		return
+	}
+
 	vars := mux.Vars(r)
 	taskID := vars["id"]
 
@@ -254,7 +281,9 @@ func getTaskHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(TaskStatusResponse{Task: task})
+	if err := json.NewEncoder(w).Encode(TaskStatusResponse{Task: task}); err != nil {
+		log.Printf("Failed to encode task response: %v", err)
+	}
 }
 
 func getEnv(key, fallback string) string {

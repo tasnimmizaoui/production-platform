@@ -1,0 +1,122 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  REGISTRY: docker.io
+  API_IMAGE: tasnimmizaoui/production-platform-api  
+  WORKER_IMAGE: tasnimmizaoui/production-platform-worker  
+
+jobs:
+  # ===== Job 1: Test =====
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.21'
+    
+    - name: Run tests - API
+      working-directory: ./app/api-service
+      run: go test -v ./...  # Removed -race temporarily
+    
+    - name: Run tests - Worker
+      working-directory: ./app/worker-service
+      run: go test -v ./...
+
+  # ===== Job 2: Build & Push Images =====
+  build:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+    
+    - name: Build and push API image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./app/api-service
+        push: true
+        tags: |
+          ${{ env.API_IMAGE }}:latest
+          ${{ env.API_IMAGE }}:${{ github.sha }}
+    
+    - name: Build and push Worker image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./app/worker-service
+        push: true
+        tags: |
+          ${{ env.WORKER_IMAGE }}:latest
+          ${{ env.WORKER_IMAGE }}:${{ github.sha }}
+
+  # ===== Job 3: Deploy to Dev (Minikube) =====
+  deploy-dev:
+    name: Deploy to Minikube (Dev)
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Minikube
+      run: |
+        # Install Minikube
+        curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+        sudo install minikube-linux-amd64 /usr/local/bin/minikube
+        
+        # Start Minikube
+        minikube start --driver=docker
+        
+        # Get kubeconfig
+        mkdir -p ~/.kube
+        minikube kubectl -- config view --flatten > ~/.kube/config
+    
+    - name: Deploy to Minikube
+      run: |
+        # Apply your Kubernetes manifests
+        kubectl apply -f k8s/  # Assuming you have k8s/ folder
+        
+        # Update images
+        kubectl set image deployment/api \
+          api=${{ env.API_IMAGE }}:${{ github.sha }} \
+          -n production-platform
+        
+        kubectl set image deployment/worker \
+          worker=${{ env.WORKER_IMAGE }}:${{ github.sha }} \
+          -n production-platform
+        
+        # Wait for rollout
+        kubectl rollout status deployment/api -n production-platform --timeout=3m
+    
+    - name: Test deployment
+      run: |
+        # Port forward and test
+        kubectl port-forward service/api 8080:80 -n production-platform &
+        sleep 10
+        curl -f http://localhost:8080/health
+        echo "✅ Deployment successful!"

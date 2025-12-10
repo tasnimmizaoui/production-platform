@@ -107,7 +107,9 @@ func TestMetricsEndpoint(t *testing.T) {
 	router := mux.NewRouter()
 	router.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("# Metrics"))
+		if _, err := w.Write([]byte("# Metrics")); err != nil {
+			t.Logf("Write failed: %v", err)
+		}
 	})
 
 	req, err := http.NewRequest("GET", "/metrics", nil)
@@ -118,7 +120,6 @@ func TestMetricsEndpoint(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 }
-
 func BenchmarkHealthEndpoint(b *testing.B) {
 	router := setupTestRouter()
 	req, _ := http.NewRequest("GET", "/health", nil)
