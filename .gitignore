@@ -6,3 +6,4 @@ scripts/test-now.sh
 outputs.md 
 kubeconfig-dev.yaml
 scripts/generate-load.sh
+../../.github/workflows/ci-cd.yaml

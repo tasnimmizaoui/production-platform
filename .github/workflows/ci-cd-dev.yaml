@@ -98,8 +98,8 @@ jobs:
     
     - name: Deploy to Minikube
       run: |
-        # Apply your Kubernetes manifests
-        kubectl apply -f k8s/  # Assuming you have k8s/ folder
+        # Apply your Kubernetes manifests recursively 
+        find k8s/ -name "*.yaml" -o -name "*.yml" | xargs -I {} kubectl apply -f {}
         
         # Update images
         kubectl set image deployment/api \
