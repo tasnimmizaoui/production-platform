@@ -36,7 +36,8 @@ spec:
       containers:
       - name: worker
         image: tasnimmizaoui/production-platform-worker:latest
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Always
+                         # IfNotPresent -> I used this at first when i wanted the images to be pulled from my local docekr env 
                          # Always -> If i want to pull from Dockerhub 
         ports:
         - containerPort: 8081
