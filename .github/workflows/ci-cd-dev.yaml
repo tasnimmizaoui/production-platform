@@ -106,16 +106,75 @@ jobs:
     - name: Deploy to Kind
       run: |
         # Create namespace
-        kubectl create namespace production-platform --dry-run=client -o yaml | kubectl apply -f -
         
-        # Apply all manifests
-        echo "📦 Deploying Kubernetes manifests..."
-        kubectl apply -f k8s/base/ -n production-platform
+        echo "📦 Deploying Kubernetes manifests in correct order..."
         
-        # Wait for Redis (StatefulSet takes time)
-        kubectl rollout status statefulset/redis -n production-platform --timeout=120s
+        # 1. First: Deploy namespace 
+        if [ -f "k8s/base/namespace.yaml" ]; then
+          echo "1. Applying namespace..."
+          kubectl apply -f k8s/base/namespace.yaml
+        fi
         
-        # Update to newly built images
+        # 2. Deploy ConfigMaps and Secrets
+        echo "2. Applying configuration..."
+        for config_file in k8s/base/configmap.yaml k8s/base/secret.yaml; do
+          if [ -f "$config_file" ]; then
+            kubectl apply -f "$config_file" -n production-platform
+          fi
+        done
+        
+        # 3. Deploy Redis first (StatefulSet, needs to be ready before API/Worker)
+        echo "3. Deploying Redis (StatefulSet)..."
+        if [ -d "k8s/base/redis" ]; then
+          # Apply service before statefulset
+          if [ -f "k8s/base/redis/service.yaml" ]; then
+            kubectl apply -f k8s/base/redis/service.yaml -n production-platform
+          fi
+          if [ -f "k8s/base/redis/statefulset.yaml" ]; then
+            kubectl apply -f k8s/base/redis/statefulset.yaml -n production-platform
+          fi
+        fi
+        
+        # 4. Wait for Redis to be ready
+        echo "⏳ Waiting for Redis to be ready..."
+        sleep 20  # Give Redis time to start
+        
+        # 5. Deploy Services (before deployments that reference them)
+        echo "4. Deploying Services..."
+        for dir in api worker; do
+          if [ -d "k8s/base/$dir" ] && [ -f "k8s/base/$dir/service.yaml" ]; then
+            kubectl apply -f k8s/base/$dir/service.yaml -n production-platform
+          fi
+        done
+        
+        # 6. Deploy Deployments (API and Worker)
+        echo "5. Deploying Deployments..."
+        for dir in api worker; do
+          if [ -d "k8s/base/$dir" ] && [ -f "k8s/base/$dir/deployment.yaml" ]; then
+            kubectl apply -f k8s/base/$dir/deployment.yaml -n production-platform
+          fi
+        done
+        
+        # 7. Deploy HPA (needs deployments to exist first)
+        echo "6. Deploying HPA..."
+        if [ -d "k8s/base/hpa" ]; then
+          kubectl apply -f k8s/base/hpa/ -n production-platform 2>/dev/null || echo "HPA may need metrics server"
+        fi
+        
+        # 8. Deploy PDB (needs deployments to exist first)
+        echo "7. Deploying PDB..."
+        if [ -d "k8s/base/pdb" ]; then
+          kubectl apply -f k8s/base/pdb/ -n production-platform
+        fi
+        
+        # 9. Deploy Ingress (if exists)
+        echo "8. Deploying Ingress..."
+        if [ -d "k8s/base/ingress" ]; then
+          kubectl apply -f k8s/base/ingress/ -n production-platform
+        fi
+        
+        # 10. Update to newly built images
+        echo "🔄 Updating to new images..."
         kubectl set image deployment/api \
           api=${{ env.API_IMAGE }}:${{ github.sha }} \
           -n production-platform
@@ -124,13 +183,16 @@ jobs:
           worker=${{ env.WORKER_IMAGE }}:${{ github.sha }} \
           -n production-platform
         
-        # Wait for rollouts
+        # 11. Wait for rollouts
+        echo "⏳ Waiting for deployments..."
         kubectl rollout status deployment/api -n production-platform --timeout=120s
         kubectl rollout status deployment/worker -n production-platform --timeout=120s
-    
-    - name: Test Deployment
-      run: |
-        echo "🧪 Testing deployment..."
+        
+        echo "✅ All deployments complete!"
+        
+        - name: Test Deployment
+          run: |
+            echo "🧪 Testing deployment..."
         
         # Test API
         kubectl run test-curl --rm -i --restart=Never \
