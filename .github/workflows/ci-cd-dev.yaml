@@ -102,6 +102,10 @@ jobs:
     
     - name: Deploy to Minikube
       run: |
+
+        minikube update-context
+        export KUBECONFIG=$HOME/.kube/config
+        
         # Apply your Kubernetes manifests recursively 
         kubectl apply -f k8s/base/ --validate=false
         
