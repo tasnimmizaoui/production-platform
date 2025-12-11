@@ -35,7 +35,7 @@ spec:
       
       containers:
       - name: worker
-        image: production-platform-worker:latest
+        image: tasnimmizaoui/production-platform-worker:latest
         imagePullPolicy: IfNotPresent
                          # Always -> If i want to pull from Dockerhub 
         ports:
