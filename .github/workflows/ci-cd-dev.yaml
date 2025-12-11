@@ -78,7 +78,7 @@ jobs:
     
     - name: Deploy to Kubernetes
       env:
-        KUBECONFIG_DATA: ${{ secrets.KUBECONFIG }}
+        KUBECONFIG_DATA: ${{ secrets.KUBECONFIG_DEV }}
       run: |
         echo "$KUBECONFIG_DATA" > kubeconfig
         export KUBECONFIG=kubeconfig
