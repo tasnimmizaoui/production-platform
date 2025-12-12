@@ -66,7 +66,7 @@ jobs:
           ${{ env.WORKER_IMAGE }}:${{ github.sha }}
           ${{ env.WORKER_IMAGE }}:latest
 
-  # ===== 3. Deploy to Kind (Kubernetes in Docker) =====
+  # ===== 3. Deploy to Kind (Using the Helm/kind action for setting up the Cluster  ) =====
   deploy-test:
     name: 🚀 Deploy & Test
     runs-on: ubuntu-latest
@@ -78,30 +78,13 @@ jobs:
       uses: actions/checkout@v4
     
     - name: Setup Kind Cluster
-      run: |
-        # Install Kind (lightweight Kubernetes in Docker)
-        curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
-        chmod +x ./kind
-        sudo mv ./kind /usr/local/bin/kind
-        
-        # Create Kind configuration
-        cat > kind-config.yaml <<EOF
-        kind: Cluster
-        apiVersion: kind.x-k8s.io/v1alpha4
-        nodes:
-        - role: control-plane
-          extraPortMappings:
-          - containerPort: 30000
-            hostPort: 30000
-            protocol: TCP
-        EOF
-        
-        # Create cluster
-        kind create cluster --name production-platform --config kind-config.yaml
-        
-        # Verify
-        kubectl cluster-info
-        kubectl get nodes
+      uses: helm/kind-action@v1
+      with:
+        cluster_name: production-platform
+        # Optional: Configure a local registry for built images
+        # registry: true
+        # registry_name: local-registry
+        # registry_port: 5000
     
     - name: Deploy to Kind
       run: |
@@ -172,7 +155,11 @@ jobs:
         if [ -d "k8s/base/ingress" ]; then
           kubectl apply -f k8s/base/ingress/ -n production-platform
         fi
-        
+
+        # ✅ SECOND: Wait for Redis to be ready
+        echo "⏳ Waiting for Redis to be ready..."
+        sleep 20
+
         # 10. Update to newly built images
         echo "🔄 Updating to new images..."
         kubectl set image deployment/api \
@@ -190,30 +177,30 @@ jobs:
         
         echo "✅ All deployments complete!"
         
-        - name: Test Deployment
-          run: |
-            echo "🧪 Testing deployment..."
+    - name: Test Deployment
+      run: |
+          echo "🧪 Testing deployment..."
         
-        # Test API
-        kubectl run test-curl --rm -i --restart=Never \
+          # Test API
+           kubectl run test-curl --rm -i --restart=Never \
           --image=curlimages/curl:latest \
           --namespace=production-platform \
           -- curl -f http://api/health
         
-        echo "✅ API is healthy!"
+           echo "✅ API is healthy!"
         
-        # Show deployment status
-        echo ""
-        echo "📊 Deployment Status:"
-        kubectl get all -n production-platform
+          # Show deployment status
+           echo ""
+          echo "📊 Deployment Status:"
+          kubectl get all -n production-platform
+          
+          echo ""
+          echo "📈 HPA Status:"
+          kubectl get hpa -n production-platform
         
-        echo ""
-        echo "📈 HPA Status:"
-        kubectl get hpa -n production-platform
-        
-        echo ""
-        echo "🛡️ PDB Status:"
-        kubectl get pdb -n production-platform
+          echo ""
+          echo "🛡️ PDB Status:"
+          kubectl get pdb -n production-platform
     
     - name: Cleanup
       if: always()
