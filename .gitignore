@@ -7,3 +7,15 @@ outputs.md
 kubeconfig-dev.yaml
 scripts/generate-load.sh
 ../../.github/workflows/ci-cd.yaml
+
+# Local .terraform directories
+**/.terraform/*   
+
+# Lock file (commit if working in team, else ignore)
+**/.terraform.lock.hcl
+
+# State files (sensitive!)
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
