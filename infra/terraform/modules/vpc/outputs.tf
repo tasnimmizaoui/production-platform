@@ -124,3 +124,21 @@ output "environment" {
   description = "Environment name"
   value       = var.environment
 }
+
+# ============================================
+# Nat instance Outputs
+# ============================================
+output "nat_instance_id" {
+  description = "NAT instance ID (if enabled)"
+  value       = var.enable_nat_instance ? aws_instance.nat[0].id : null
+}
+
+output "nat_instance_public_ip" {
+  description = "NAT instance public IP (if enabled)"
+  value       = var.enable_nat_instance ? aws_eip.nat[0].public_ip : null
+}
+
+output "nat_instance_private_ip" {
+  description = "NAT instance private IP (if enabled)"
+  value       = var.enable_nat_instance ? aws_instance.nat[0].private_ip : null
+}

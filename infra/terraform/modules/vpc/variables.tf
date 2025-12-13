@@ -113,3 +113,18 @@ variable "tags" {
     Project   = "ProductionPlatform"
   }
 }
+
+variable "enable_nat_instance" {
+    description = "Defines weather we rae using the NAT inntance or not "
+    type = bool
+    default = true
+}
+variable "nat_instance_type" {
+    description = "Our Nat instanec Type "
+    type = string  
+    default = "t2.micro"
+    validation {
+    condition     = can(regex("^t[23]\\.(micro|small)$", var.nat_instance_type))
+    error_message = "Use free tier eligible: t2.micro or t3.micro"
+  }
+}

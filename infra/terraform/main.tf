@@ -40,6 +40,10 @@ module "vpc" {
   public_subnet_cidrs  = ["10.0.1.0/24"]
   private_subnet_cidrs = ["10.0.2.0/24"]
   availability_zones   = ["us-east-1a"]  
+
+  # Enable NAT instance 
+  enable_nat_instance = true 
+  nat_instance_type   = "t2.micro"
   
   # Optional features (already with defaults, but explicit is better)
   enable_flow_logs        = true
@@ -52,23 +56,6 @@ module "vpc" {
     ManagedBy = "terraform"
   }
 }
-
-# Outputs from VPC module (optional but useful)
-output "vpc_id" {
-  description = "The VPC ID"
-  value       = module.vpc.vpc_id
-}
-
-output "private_subnet_ids" {
-  description = "Private subnet IDs for K3s"
-  value       = module.vpc.private_subnet_ids
-}
-
-output "k3s_security_group_id" {
-  description = "Security group ID for K3s cluster"
-  value       = module.vpc.k3s_security_group_id
-}
-
 
 #K3S Cluster 
 module "k3s" {
