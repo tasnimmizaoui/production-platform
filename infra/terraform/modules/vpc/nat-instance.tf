@@ -68,7 +68,7 @@ resource "aws_instance" "nat" {
 
   # Root volume configuration
   root_block_device {
-    volume_size           = 8  # Minimal size
+    volume_size           = 30  # Amazon Linux 2023 minimum (free tier: 30GB)
     volume_type           = "gp3"
     delete_on_termination = true
     encrypted             = true

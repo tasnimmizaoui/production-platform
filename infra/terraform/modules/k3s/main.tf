@@ -57,7 +57,7 @@ resource "aws_instance" "k3s_master" {
 
     # Use this for production (creates EBS volume)
   root_block_device {
-    volume_size           = 20  # GB (free tier: 30GB)
+    volume_size           = 30  # GB (Amazon Linux 2023 minimum, free tier: 30GB)
     volume_type           = "gp3"  # Cheaper than gp2
     delete_on_termination = true
     encrypted             = true
@@ -87,7 +87,7 @@ resource "aws_instance" "k3s_worker" {
   iam_instance_profile   = aws_iam_instance_profile.k3s_node.name
 
   root_block_device {
-    volume_size           = 20
+    volume_size           = 30  # Amazon Linux 2023 minimum
     volume_type           = "gp3"
     delete_on_termination = true
     encrypted             = true
