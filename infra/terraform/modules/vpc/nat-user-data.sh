@@ -1,5 +1,6 @@
 #!/bin/bash
-set -e
+# Don't exit on error - we'll handle errors explicitly
+set -o pipefail
 
 # Configuration
 VPC_CIDR="10.0.0.0/16"
@@ -12,6 +13,15 @@ exec 2>&1
 
 echo "=== NAT Instance Setup Started at $(date) ==="
 echo "Environment: ${environment}"
+
+# Error handling function
+handle_error() {
+    echo "ERROR: $1" >&2
+    echo "Continuing with setup..."
+}
+
+# Success tracking
+SETUP_SUCCESS=true
 
 # Get instance metadata
 echo "Getting instance metadata..."
@@ -38,13 +48,26 @@ EOF
 
 # Enable IP forwarding
 echo "Enabling IP forwarding..."
+
+# Detect actual network interface (Amazon Linux 2023 uses ens5, not eth0)
+PRIMARY_INTERFACE=$(ip route | grep default | awk '{print $5}')
+echo "Primary network interface: $PRIMARY_INTERFACE"
+
 cat > /etc/sysctl.d/99-nat.conf << EOF
 net.ipv4.ip_forward = 1
 net.ipv4.conf.all.send_redirects = 0
 net.ipv4.conf.default.send_redirects = 0
-net.ipv4.conf.eth0.send_redirects = 0
+net.ipv4.conf.$PRIMARY_INTERFACE.send_redirects = 0
 EOF
-sysctl -p /etc/sysctl.d/99-nat.conf
+
+# Apply sysctl settings (don't fail if one setting fails)
+sysctl -p /etc/sysctl.d/99-nat.conf || handle_error "Some sysctl settings failed, but continuing"
+
+# Verify critical setting
+if [ "$(cat /proc/sys/net/ipv4/ip_forward)" != "1" ]; then
+    echo "CRITICAL: IP forwarding not enabled!"
+    SETUP_SUCCESS=false
+fi
 
 # Configure iptables with security
 echo "Configuring iptables with security rules..."
@@ -152,3 +175,12 @@ echo "=== NAT Instance Setup Complete at $(date) ==="
 echo "NAT instance $INSTANCE_ID in $REGION is ready"
 echo "VPC CIDR: $VPC_CIDR"
 echo "Health checks will run every 5 minutes"
+
+# Final status
+if [ "$SETUP_SUCCESS" = true ]; then
+    echo "✅ SETUP SUCCESSFUL - All critical components configured"
+    exit 0
+else
+    echo "⚠️ SETUP COMPLETED WITH WARNINGS - Check logs above"
+    exit 1
+fi
