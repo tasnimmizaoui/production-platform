@@ -68,23 +68,23 @@ A NAT (Network Address Translation) instance is a regular EC2 instance configure
 ### The NAT Process
 
 ```
-Private Instance                NAT Instance               Internet
-10.0.2.10                       10.0.1.50                  
-│                               │                          
-│ 1. Packet: 10.0.2.10 → API   │                          
-├──────────────────────────────→│                          
-│                               │ 2. MASQUERADE            
-│                               │    Replace source:       
-│                               │    10.0.1.50 → API       
-│                               ├─────────────────────────→
-│                               │                          
-│                               │ 3. Response: API → NAT   
-│                               │←─────────────────────────
-│                               │ 4. Un-NAT               
-│ 5. Response to 10.0.2.10     │    Replace dest:         
-│←──────────────────────────────┤    10.0.2.10             
-│                               │                          
-```
+  Private Instance                NAT Instance               Internet
+  10.0.2.10                       10.0.1.50                  
+  │                               │                               |
+  │ 1. Packet: 10.0.2.10 → API    │                               |
+  ├──────────────────────────────>│                               |
+  │                               │ 2. MASQUERADE                 |
+  │                               │    Replace source:            |
+  │                               │    10.0.1.50 → API            |
+  │                               ├─────────────────────────>     |
+  │                               │                               |
+  │                               │ 3. Response: API → NAT        |
+  │                               │<─────────────────────────     |
+  │                               │ 4. Un-NAT                     |
+  │ 5. Response to 10.0.2.10      │     Replace dest:         
+  │<──────────────────────────────┤      10.0.2.10             
+  │                               │                          
+  ```
 
 ### Technical Components
 
@@ -127,23 +127,57 @@ route {
 
 ### Terraform Configuration
 
+**File:** [`infra/terraform/modules/vpc/nat-instance.tf`](../infra/terraform/modules/vpc/nat-instance.tf)
+
 ```hcl
+# NAT Instance
 resource "aws_instance" "nat" {
-  ami                    = data.aws_ami.amazon_linux_2023.id
+  count = var.enable_nat_instance ? 1 : 0
+
+  ami                    = data.aws_ami.nat_ami.id
   instance_type          = "t2.micro"
   subnet_id              = aws_subnet.public[0].id
   vpc_security_group_ids = [aws_security_group.nat.id]
+  iam_instance_profile   = aws_iam_instance_profile.nat.name
   
-  # CRITICAL for NAT functionality
+  # CRITICAL: Disable source/destination check for NAT to work
   source_dest_check = false
-  
-  user_data = base64encode(templatefile("nat-user-data.sh", {
+
+  user_data = base64encode(templatefile("${path.module}/nat-user-data.sh", {
     environment = var.environment
   }))
-  
-  tags = {
-    Name = "${var.environment}-nat-instance"
+
+  root_block_device {
+    volume_size           = 30
+    volume_type           = "gp3"
+    delete_on_termination = true
+    encrypted             = true
   }
+
+  tags = merge(var.tags, {
+    Name = "${var.environment}-nat-instance"
+  })
+}
+
+# Elastic IP for NAT
+resource "aws_eip" "nat" {
+  count = var.enable_nat_instance ? 1 : 0
+
+  domain   = "vpc"
+  instance = aws_instance.nat[0].id
+
+  tags = merge(var.tags, {
+    Name = "${var.environment}-nat-eip"
+  })
+}
+
+# Route from Private Subnet to NAT
+resource "aws_route" "private_nat" {
+  count = var.enable_nat_instance ? 1 : 0
+
+  route_table_id         = aws_route_table.private.id
+  destination_cidr_block = "0.0.0.0/0"
+  network_interface_id   = aws_instance.nat[0].primary_network_interface_id
 }
 ```
 
@@ -182,30 +216,14 @@ resource "aws_security_group" "nat" {
 
 ### Bootstrap Script
 
-```bash
-#!/bin/bash
-set -e
+**File:** [`infra/terraform/modules/vpc/nat-user-data.sh`](../infra/terraform/modules/vpc/nat-user-data.sh)
 
-echo "=== NAT Instance Setup ==="
 
-# Enable IP forwarding
-echo "net.ipv4.ip_forward = 1" >> /etc/sysctl.conf
-sysctl -p
-
-# Configure iptables
-iptables -t nat -A POSTROUTING -s 10.0.0.0/16 -j MASQUERADE
-iptables -A FORWARD -s 10.0.0.0/16 -j ACCEPT
-iptables -A FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT
-
-# Rate limiting (prevent abuse)
-iptables -A FORWARD -m limit --limit 1000/minute --limit-burst 1000 -j ACCEPT
-
-# Save rules
-iptables-save > /etc/sysconfig/iptables
-systemctl enable iptables
-
-echo "NAT instance ready"
-```
+**Key Fixes Implemented after some initial scripts that faces some errors :**
+- ❌ Removed `set -e` (was causing silent failures)
+- ✅ Dynamic interface detection (`ens5` not `eth0`)
+- ✅ Explicit error handling with `handle_error()`
+- ✅ Comprehensive logging to `/var/log/nat-setup.log`
 
 ---
 
@@ -518,6 +536,138 @@ sysctl -w net.core.rmem_max=16777216
 | **Setup Time** | 5 minutes | 15 minutes | 20 minutes |
 | **Monitoring** | Built-in | Custom | Custom |
 | **Failover** | Automatic | Manual | Manual |
+
+---
+
+## Real-World Verification Results
+
+**Date:** December 14, 2025  
+**Environment:** dev  
+**Region:** us-east-1
+
+### Deployed Infrastructure
+
+| Component | Instance ID | Type | IP Address | Status |
+|-----------|-------------|------|------------|--------|
+| NAT Instance | i-0e713307c7af25b9e | t2.micro | 54.84.39.57 (public)<br>10.0.1.129 (private) | ✅ Running |
+| K3s Master | i-0c14c553daecde0d2 | t3.micro | 10.0.2.x (private) | ✅ Running |
+| K3s Worker | i-02d7714560250d70b | t3.micro | 10.0.2.x (private) | ✅ Running |
+
+### ✅ NAT Instance Verification
+
+```bash
+# IP Forwarding Check
+$ cat /proc/sys/net/ipv4/ip_forward
+1  #  Enabled --> Outputs 1 
+
+# iptables NAT Rules
+$ sudo iptables -t nat -L POSTROUTING -n -v
+Chain POSTROUTING (policy ACCEPT 0 packets, 0 bytes)
+pkts bytes target     prot opt in     out     source               destination
+  12  720 MASQUERADE  all  --  *      ens5    10.0.0.0/16          0.0.0.0/0
+#  NAT rule configured
+
+# Health Check
+$ sudo /usr/local/bin/nat-health-check.sh
+ SETUP SUCCESSFUL
+# All checks pass
+```
+
+### ✅ K3s Cluster Verification
+
+```bash
+# Cluster Status
+$ kubectl get nodes
+NAME                         STATUS   ROLES                  AGE   VERSION
+ip-10-0-2-x.ec2.internal     Ready    control-plane,master   15m   v1.28.x
+ip-10-0-2-y.ec2.internal     Ready    <none>                 14m   v1.28.x
+# ✅ 2/2 nodes Ready
+
+# Pod Status
+$ kubectl get pods -A
+NAMESPACE     NAME                              READY   STATUS    RESTARTS   AGE
+kube-system   coredns-xxx                       1/1     Running   0          15m
+kube-system   local-path-provisioner-xxx        1/1     Running   0          15m
+default       redis-xxx                         1/1     Running   0          14m
+# ✅ All pods running
+```
+
+### ✅ Internet Connectivity Tests
+
+**From K3s Master (Private Subnet):**
+
+```bash
+# 1. Route Table
+$ ip route
+default via 10.0.1.129 dev ens5  # ✅ Routes through NAT
+10.0.2.0/24 dev ens5 proto kernel scope link src 10.0.2.x
+
+# 2. HTTP/HTTPS Access
+$ curl -I https://get.k3s.io
+HTTP/2 200  # ✅ Internet accessible
+
+$ curl -I https://registry-1.docker.io/v2/
+HTTP/1.1 401 Unauthorized  # ✅ Reachable (needs auth)
+
+# 3. DNS Resolution
+$ nslookup google.com
+Server:    10.0.0.2
+Address:   10.0.0.2#53
+
+Non-authoritative answer:
+Name:   google.com
+Address: 142.250.80.46
+# ✅ DNS working
+
+# 4. Ping Test
+$ ping -c 3 8.8.8.8
+3 packets transmitted, 3 received, 0% packet loss
+# ✅ ICMP working
+
+# 5. Traceroute (Verify NAT Routing)
+$ traceroute -n -m 3 8.8.8.8
+1  10.0.1.129  0.5ms   # ✅ First hop is NAT instance
+2  * * *
+3  * * *
+# ✅ Traffic routes through NAT
+
+# 6. GitHub API Test
+$ curl https://api.github.com
+{
+  "current_user_url": "https://api.github.com/user",
+  ...
+}
+# ✅ Full internet access confirmed
+```
+
+### 📊 Cost Summary
+
+```
+  ┌────────────────────────────────────────┐
+  │  Monthly Cost: $0.00                   │
+  │  Within Free Tier Limits:              │
+  │    • t2.micro: 750 hours/month ✅      │
+  │    • t3.micro: 750 hours/month ✅      │
+  │    • EBS: 30GB free ✅                 │
+  │                                        │
+  │  Savings vs NAT Gateway: $32.85/month  │
+  │  Annual Savings: $394.20               │
+  └────────────────────────────────────────┘
+```
+
+### 📸 Screenshots
+
+[Running Instances](image.png)
+*Three EC2 instances running: NAT, K3s Master, K3s Worker*
+
+[K3s Master Verification](image-4.png)
+*K3s cluster running successfully*
+
+[Route Table](image-3.png)
+*Private subnet routing through NAT instance*
+
+[Docker Hub Access](image-5.png)
+*Docker Hub accessible from private K3s master*
 
 ---
 

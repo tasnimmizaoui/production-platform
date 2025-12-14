@@ -1,0 +1,40 @@
+Outputs:
+
+deployment_summary = {
+  "cost_estimate" = "~$0/month (within free tier)"
+  "environment" = "dev"
+  "k3s_cluster" = {
+    "master" = "10.0.2.214"
+    "workers" = [
+      "10.0.2.227",
+    ]
+  }
+  "nat_enabled" = "Yes (54.84.39.57)"
+  "region" = "us-east-1"
+  "vpc_id" = "vpc-0a57bca6ab5f79f7a"
+}
+k3s_kubeconfig_command = "aws ssm start-session --target i-0c14c553daecde0d2 --document-name AWS-StartInteractiveCommand --parameters command='sudo cat /etc/rancher/k3s/k3s.yaml'"
+k3s_master_id = "i-0c14c553daecde0d2"
+k3s_master_ip = "10.0.2.214"
+k3s_master_private_ip = "10.0.2.214"
+k3s_master_session_command = "aws ssm start-session --target i-0c14c553daecde0d2"
+k3s_security_group_id = "sg-0d224aeab8c4c15dd"
+k3s_worker_ids = [
+  "i-02d7714560250d70b",
+]
+k3s_worker_private_ips = [
+  "10.0.2.227",
+]
+kubeconfig_command = "aws ssm start-session --target i-0c14c553daecde0d2 --document-name AWS-StartInteractiveCommand --parameters command='sudo cat /etc/rancher/k3s/k3s.yaml'"
+nat_instance_id = "i-0e713307c7af25b9e"
+nat_instance_private_ip = "10.0.1.129"
+nat_instance_public_ip = "54.84.39.57"
+nat_instance_session_command = "aws ssm start-session --target i-0e713307c7af25b9e"
+private_subnet_ids = [
+  "subnet-0dc14b6b6e9a742b8",
+]
+public_subnet_ids = [
+  "subnet-09f375287bf657fad",
+]
+vpc_cidr = "10.0.0.0/16"
+vpc_id = "vpc-0a57bca6ab5f79f7a"

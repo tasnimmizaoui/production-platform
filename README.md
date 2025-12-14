@@ -189,38 +189,41 @@ production-platform/
 
 ## 🏗️ Infrastructure Components
 
-### Phase 1: Networking ✅
+### Phase 1: Networking ✅ COMPLETE
 - [x] VPC (10.0.0.0/16)
 - [x] Public & Private subnets
 - [x] Internet Gateway
 - [x] NAT Instance (free alternative to NAT Gateway)
 - [x] VPC Flow Logs (S3)
 - [x] S3 VPC Endpoint
+- [x] **Verified:** All connectivity tests passing
 
-### Phase 2: Compute ✅
+### Phase 2: Compute ✅ COMPLETE
 - [x] K3s master node (t3.micro)
 - [x] K3s worker node (t3.micro)
 - [x] Redis (in-cluster pod)
 - [x] IAM roles & instance profiles
 - [x] Session Manager access
+- [x] **Verified:** 2/2 nodes Ready, pods running
 
-### Phase 3: VPC Endpoints + Docker Proxy 🚧
+### Phase 3: Applications 📋 NEXT
+- [ ] Deploy API service to K3s
+- [ ] Deploy worker service
+- [ ] Configure ingress
+- [ ] Test end-to-end workflow
+
+### Phase 4: CI/CD Pipeline 🚀
+- [ ] GitHub Actions workflow
+- [ ] Automated testing (Go tests)
+- [ ] Docker image builds
+- [ ] Kind cluster validation
+- [ ] Automated deployments
+
+### Phase 5: VPC Endpoints + Docker Proxy (Enterprise) 🎯
 - [ ] S3-backed Docker registry mirror
 - [ ] Zero-egress network architecture
 - [ ] Air-gapped cluster security
 - [ ] Automated image synchronization
-
-### Phase 4: Applications 📋
-- [ ] Deploy API service
-- [ ] Deploy worker service
-- [ ] Configure ingress
-- [ ] Set up monitoring
-
-### Phase 5: CI/CD 📋
-- [ ] GitHub Actions pipeline
-- [ ] Automated testing
-- [ ] Docker image builds
-- [ ] Rolling deployments
 
 ---
 
@@ -251,16 +254,22 @@ iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
 
 **Benefits:**
 - $0 cost (free tier)
-- Full control
-- Easy debugging
+- Full control & debugging access
 - Production-ready for small workloads
+- Learning opportunity for NAT mechanics
 
 **Trade-offs:**
-- Single point of failure
-- Manual scaling
-- Lower throughput than NAT Gateway
+- Single point of failure (no HA)
+- Manual scaling required
+- Limited throughput vs NAT Gateway
 
-[Read more →](infra/terraform/modules/vpc/README.md)
+**Real Implementation:**
+- ✅ Verified working with K3s cluster
+- ✅ Internet access from private subnet confirmed
+- ✅ Health monitoring configured
+- ✅ $394/year savings vs NAT Gateway
+
+[**Read Complete Implementation Guide →**](docs/NAT_Instance_Implementation.md) 
 
 ### 2. Session Manager Access ($8/month savings)
 
@@ -289,11 +298,10 @@ Full Kubernetes experience with minimal overhead:
 
 ## 📚 Documentation
 
-- [VPC Module README](infra/terraform/modules/vpc/README.md) - Networking details
-- [K3s Module README](infra/terraform/modules/k3s/README.md) - Cluster setup
-- [NAT Instance Deep Dive](docs/diagrams/Nat_instance.md) - How NAT works
-- [Minimal Cost VPC](docs/diagrams/Minimal_cost_vpc.md) - Architecture decisions
-- [Production Architecture](docs/diagrams/Production_Architecture_Overview.md) - Full stack
+- [NAT Instance Implementation Guide](docs/NAT_Instance_Implementation.md) - Complete NAT setup, troubleshooting, and verification
+- [VPC Module README](infra/terraform/modules/vpc/README.md) - Networking architecture and configuration
+- [K3s Module README](infra/terraform/modules/k3s/README.md) - Cluster setup and management
+- [Production Architecture](docs/diagrams/Production_Architecture_Overview.md) - Full stack overview
 
 ---
 
@@ -344,11 +352,16 @@ kubectl get events --sort-by=.metadata.creationTimestamp
 
 ```bash
 # From private instance
-ip route  # Should show default via NAT IP
-traceroute 8.8.8.8  # Should route through NAT
+ip route  
+traceroute 8.8.8.8  # S
+
+# Check NAT instance
+aws ssm start-session --target <nat-id>
+cat /proc/sys/net/ipv4/ip_forward  # Must be: 1
+sudo iptables -t nat -L POSTROUTING -n -v  # Must show MASQUERADE rule
 ```
 
-[Full troubleshooting guide →](infra/terraform/modules/vpc/README.md#troubleshooting)
+[**Complete Troubleshooting Guide →**](docs/NAT_Instance_Implementation.md#troubleshooting-guide)
 
 ---
 
@@ -388,14 +401,16 @@ traceroute 8.8.8.8  # Should route through NAT
 
 ## 📈 Roadmap
 
-- [x] **Phase 1:** Basic VPC setup
-- [x] **Phase 2:** NAT instance implementation
-- [ ] **Phase 3:** VPC endpoints + Docker proxy (enterprise security)
-- [ ] **Phase 4:** Application deployment
-- [ ] **Phase 5:** CI/CD pipeline
-- [ ] **Phase 6:** Monitoring stack (Prometheus, Grafana)
+- [x] **Phase 1:** VPC networking with NAT instance
+- [x] **Phase 2:** K3s cluster deployment (2 nodes + Redis)
+- [ ] **Phase 3:** Application deployment (API + Worker services)
+- [ ] **Phase 4:** CI/CD pipeline (GitHub Actions + Kind testing)
+- [ ] **Phase 5:** VPC endpoints + Docker proxy (enterprise security)
+- [ ] **Phase 6:** Monitoring stack (Prometheus, Grafana, Loki)
 - [ ] **Phase 7:** Service mesh (Linkerd)
 - [ ] **Phase 8:** Auto-scaling & high availability
+
+**Current Status:** Infrastructure verified and working. Ready for application deployment! 🚀
 
 ---
 
