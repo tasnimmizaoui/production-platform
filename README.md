@@ -174,11 +174,9 @@ production-platform/
 │   ├── grafana/
 │   └── loki/
 │
-├── ci/                         # CI/CD pipelines
-│   └── scripts/
 │
 ├── docs/                       # Documentation
-│   └── diagrams/
+│   
 │
 └── scripts/                    # Helper scripts
     ├── deploy.sh
@@ -403,35 +401,14 @@ sudo iptables -t nat -L POSTROUTING -n -v  # Must show MASQUERADE rule
 
 - [x] **Phase 1:** VPC networking with NAT instance
 - [x] **Phase 2:** K3s cluster deployment (2 nodes + Redis)
-- [ ] **Phase 3:** Application deployment (API + Worker services)
-- [ ] **Phase 4:** CI/CD pipeline (GitHub Actions + Kind testing)
+- [x] **Phase 3:** Application deployment (API + Worker services) on local cluster 
+- [x] **Phase 4:** CI/CD pipeline (GitHub Actions + Kind testing)
 - [ ] **Phase 5:** VPC endpoints + Docker proxy (enterprise security)
 - [ ] **Phase 6:** Monitoring stack (Prometheus, Grafana, Loki)
 - [ ] **Phase 7:** Service mesh (Linkerd)
 - [ ] **Phase 8:** Auto-scaling & high availability
 
 **Current Status:** Infrastructure verified and working. Ready for application deployment! 🚀
-
----
-
-## 🤝 Contributing
-
-This is a learning project, but suggestions are welcome!
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Submit a pull request
-
----
-
-## 📝 Blog Series (Coming Soon)
-
-1. **Building a $0 Kubernetes Cluster on AWS**
-2. **NAT Instance vs NAT Gateway: A Cost Analysis**
-3. **Air-Gapped Kubernetes with VPC Endpoints**
-4. **Monitoring K3s with Free Tools**
-5. **Production-Ready Security on a Budget**
 
 ---
 
@@ -449,24 +426,3 @@ This is a learning project, but suggestions are welcome!
 MIT License - Feel free to use this project for learning and portfolio purposes.
 
 ---
-
-## 👤 Author
-
-**Your Name**
-- Portfolio: [your-portfolio.com](https://your-portfolio.com)
-- GitHub: [@yourusername](https://github.com/yourusername)
-- LinkedIn: [Your Name](https://linkedin.com/in/yourprofile)
-
----
-
-## ⭐ If This Helped You
-
-Give this repo a star ⭐ and share it with others learning DevOps!
-
-**Questions?** Open an issue or reach out on LinkedIn.
-
----
-
-**Built with ❤️ for learning, optimized for $0 cost, ready for production.**
-
-🚀 Happy Learning!
