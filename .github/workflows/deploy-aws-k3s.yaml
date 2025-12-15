@@ -153,9 +153,8 @@ jobs:
         COMMAND_ID=$(aws ssm send-command \
           --instance-ids "$INSTANCE_ID" \
           --document-name "AWS-RunShellScript" \
-          --parameters 'commands=["bash -s"]' \
+          --parameters commands="$(cat deploy-commands.sh)" \
           --comment "GitHub Actions K3s Deployment" \
-          --cli-input-yaml <(cat deploy-commands.sh) \
           --query 'Command.CommandId' \
           --output text)
         
@@ -204,7 +203,7 @@ jobs:
         COMMAND_ID=$(aws ssm send-command \
           --instance-ids "$INSTANCE_ID" \
           --document-name "AWS-RunShellScript" \
-          --parameters "$(cat health-check.sh | jq -Rs '{commands: [.]}')" \
+          --parameters commands="$(cat health-check.sh)" \
           --query 'Command.CommandId' \
           --output text)
         
@@ -246,6 +245,6 @@ jobs:
         aws ssm send-command \
           --instance-ids "$INSTANCE_ID" \
           --document-name "AWS-RunShellScript" \
-          --parameters "$(cat rollback.sh | jq -Rs '{commands: [.]}')"
+          --parameters commands="$(cat rollback.sh)"
         
         echo "## ❌ Deployment Failed - Rollback Initiated" >> $GITHUB_STEP_SUMMARY
