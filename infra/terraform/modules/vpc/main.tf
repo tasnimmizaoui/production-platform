@@ -89,6 +89,28 @@ resource "aws_network_acl" "public" {
     from_port  = 443
     to_port    = 443
   }
+  
+  # Allow ICMP (ping responses)
+  ingress {
+    protocol   = "icmp"
+    rule_no    = 130
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 0
+    to_port    = 0
+    icmp_type  = -1
+    icmp_code  = -1
+  }
+  
+  # Allow UDP ephemeral ports (for DNS responses, etc)
+  ingress {
+    protocol   = "udp"
+    rule_no    = 140
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 1024
+    to_port    = 65535
+  }
    
    # ADD EGRESS RULES (NACLs are stateless!)
   egress {

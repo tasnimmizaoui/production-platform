@@ -33,12 +33,36 @@ resource "aws_security_group" "k3s" {
     cidr_blocks = [var.vpc_cidr]
   }
   
-  # Limited egress - only what's needed
+  # Egress rules for K3s operations
   egress {
     description = "HTTPS to internet (for pulls)"
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  
+  egress {
+    description = "HTTP to internet (for package updates)"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  
+  egress {
+    description = "DNS queries"
+    from_port   = 53
+    to_port     = 53
+    protocol    = "udp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  
+  egress {
+    description = "ICMP for ping and diagnostics"
+    from_port   = -1
+    to_port     = -1
+    protocol    = "icmp"
     cidr_blocks = ["0.0.0.0/0"]
   }
   
@@ -115,6 +139,33 @@ resource "aws_security_group" "nat" {
     to_port     = 22
     protocol    = "tcp"
     cidr_blocks = [var.my_ip_address]
+  }
+
+  # Allow ICMP (ping) responses from internet
+  ingress {
+    description = "ICMP from internet"
+    from_port   = -1
+    to_port     = -1
+    protocol    = "icmp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  # Allow return traffic on ephemeral ports (for NAT's own connections)
+  ingress {
+    description = "Return traffic from internet"
+    from_port   = 1024
+    to_port     = 65535
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  # Allow return traffic on ephemeral ports UDP
+  ingress {
+    description = "Return traffic from internet (UDP)"
+    from_port   = 1024
+    to_port     = 65535
+    protocol    = "udp"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   # Allow all outbound traffic
