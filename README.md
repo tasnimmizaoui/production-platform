@@ -24,8 +24,6 @@ Build a **real production platform** for learning, demonstrating:
 
 **Perfect for:**
 - 📚 Learning DevOps/SRE practices
-- 💼 Portfolio/resume projects
-- 🎓 Interview preparation
 - 🚀 Small production workloads
 
 ---
@@ -108,7 +106,7 @@ aws configure
 
 ```bash
 # Clone repository
-git clone https://github.com/yourusername/production-platform
+git clone https://github.com/tasnimmizaoui/production-platform
 cd production-platform
 
 # Configure variables
@@ -150,7 +148,7 @@ production-platform/
 ├── app/                          # Application code
 │   ├── api-service/             # Go REST API
 │   ├── worker-service/          # Background workers
-│   └── frontend/                # React UI
+│   └── frontend/                # not set up yet
 │
 ├── infra/                       # Infrastructure as Code
 │   └── terraform/
