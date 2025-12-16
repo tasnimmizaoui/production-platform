@@ -1,0 +1,51 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: production-platform
+  namespace: argocd
+  # Finalizer to ensure proper cleanup
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  # The project the application belongs to
+  project: default
+  
+  # Source repository configuration
+  source:
+    # Your GitHub repository
+    repoURL: https://github.com/tasnimmizaoui/production-platform.git
+    targetRevision: main
+    path: k8s/overlays/prod
+    
+  # Destination cluster and namespace
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: production-platform
+  
+  # Sync policy
+  syncPolicy:
+    # Automatically create namespace if it doesn't exist
+    syncOptions:
+      - CreateNamespace=true
+    
+    # Automated sync configuration
+    automated:
+      # Automatically sync when Git changes
+      prune: true        # Remove resources not in Git
+      selfHeal: true     # Force sync when cluster state differs from Git
+      allowEmpty: false  # Don't sync if repo is empty
+    
+    # Retry configuration
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  
+  # Ignore differences in certain fields (optional)
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas  # Allow manual scaling without sync conflicts
