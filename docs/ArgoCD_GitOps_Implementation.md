@@ -48,7 +48,7 @@ aws ssm send-command \
 
 Or directly on K3s master:
 ```bash
-curl -s https://raw.githubusercontent.com/YOUR_USERNAME/production-platform/main/scripts/install-argocd.sh | bash
+curl -s https://raw.githubusercontent.com/tasnimmizaoui/production-platform/main/scripts/install-argocd.sh | bash
 ```
 
 ### 2. Update ArgoCD Application Manifest

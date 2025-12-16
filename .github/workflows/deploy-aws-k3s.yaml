@@ -1,15 +1,17 @@
-name: Deploy to AWS K3s
+name: Build and Push Images (ArgoCD GitOps)
 
 on:
-  push:
-    branches: [ main ]
-  workflow_dispatch:  # Allow manual trigger
+  #push:
+  #  branches: [ main ]
+   # paths:
+    #  - 'app/**'
+     # - '.github/workflows/deploy-aws-k3s.yaml'
+  workflow_dispatch:
 
 env:
   REGISTRY: docker.io
   API_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/production-platform-api
   WORKER_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/production-platform-worker
-  AWS_REGION: us-east-1
 
 jobs:
   # ===== 1. Quality Gate =====
