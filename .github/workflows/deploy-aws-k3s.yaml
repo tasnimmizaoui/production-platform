@@ -104,9 +104,23 @@ jobs:
         echo "instance-id=$INSTANCE_ID" >> $GITHUB_OUTPUT
         echo "Found K3s master: $INSTANCE_ID"
     
+    - name: Upload K8s Manifests to S3
+      run: |
+        echo "📦 Uploading manifests to S3..."
+        BUCKET_NAME="k3s-deploy-$(date +%s)"
+        aws s3 mb s3://$BUCKET_NAME --region ${{ env.AWS_REGION }}
+        
+        # Upload all manifests
+        tar czf manifests.tar.gz k8s/
+        aws s3 cp manifests.tar.gz s3://$BUCKET_NAME/manifests.tar.gz
+        
+        echo "bucket-name=$BUCKET_NAME" >> $GITHUB_OUTPUT
+      id: upload-manifests
+    
     - name: Deploy to K3s via SSM
       env:
         INSTANCE_ID: ${{ steps.get-instance.outputs.instance-id }}
+        BUCKET_NAME: ${{ steps.upload-manifests.outputs.bucket-name }}
       run: |
         echo "🚀 Deploying to K3s cluster..."
         
@@ -117,21 +131,38 @@ jobs:
           --parameters '{
             "commands": [
               "set -e",
+              "cd /tmp",
+              "echo \"📥 Downloading manifests from S3...\"",
+              "aws s3 cp s3://'"$BUCKET_NAME"'/manifests.tar.gz .",
+              "tar xzf manifests.tar.gz",
+              "cd k8s/base",
               "echo \"📦 Starting deployment to K3s...\"",
-              "echo \"🔄 Updating API deployment...\"",
-              "kubectl set image deployment/api api=${{ env.API_IMAGE }}:${{ github.sha }} -n production-platform",
-              "echo \"🔄 Updating Worker deployment...\"",
-              "kubectl set image deployment/worker worker=${{ env.WORKER_IMAGE }}:${{ github.sha }} -n production-platform",
+              "echo \"🔧 Creating namespace and configmap...\"",
+              "kubectl apply -f namespace.yaml",
+              "kubectl apply -f configmap.yaml",
+              "echo \"🔴 Deploying Redis...\"",
+              "kubectl apply -f redis/",
+              "echo \"⏳ Waiting for Redis to be ready...\"",
+              "kubectl wait --for=condition=ready pod -l app=redis -n production-platform --timeout=120s || true",
+              "echo \"🔄 Updating image tags in manifests...\"",
+              "sed -i \"s|image: .*/production-platform-api:.*|image: '"${{ env.API_IMAGE }}:${{ github.sha }}"'|g\" api/deployment.yaml",
+              "sed -i \"s|image: .*/production-platform-worker:.*|image: '"${{ env.WORKER_IMAGE }}:${{ github.sha }}"'|g\" worker/deployment.yaml",
+              "echo \"🚀 Deploying API service...\"",
+              "kubectl apply -f api/",
+              "echo \"⚙️ Deploying Worker service...\"",
+              "kubectl apply -f worker/",
               "echo \"⏳ Waiting for API rollout...\"",
               "kubectl rollout status deployment/api -n production-platform --timeout=180s",
               "echo \"⏳ Waiting for Worker rollout...\"",
               "kubectl rollout status deployment/worker -n production-platform --timeout=180s",
               "echo \"✅ Deployment complete! Pod status:\"",
-              "kubectl get pods -n production-platform",
+              "kubectl get pods -n production-platform -o wide",
               "echo \"\"",
               "echo \"📊 Deployment details:\"",
-              "kubectl describe deployment/api -n production-platform | grep -A 3 \"Image:\"",
-              "kubectl describe deployment/worker -n production-platform | grep -A 3 \"Image:\""
+              "kubectl get all -n production-platform",
+              "echo \"\"",
+              "echo \"🧹 Cleanup...\"",
+              "cd /tmp && rm -rf k8s manifests.tar.gz"
             ]
           }' \
           --comment "GitHub Actions K3s Deployment" \
@@ -161,6 +192,13 @@ jobs:
           --instance-id "$INSTANCE_ID" \
           --query 'StandardOutputContent' \
           --output text
+    
+    - name: Cleanup S3 Bucket
+      if: always()
+      run: |
+        if [ -n "${{ steps.upload-manifests.outputs.bucket-name }}" ]; then
+          aws s3 rb s3://${{ steps.upload-manifests.outputs.bucket-name }} --force || true
+        fi
     
     - name: Health Check
       env:
@@ -213,24 +251,13 @@ jobs:
       run: |
         echo "❌ Deployment failed! Rolling back..."
         
-        cat > rollback.sh << 'EOF'
-        kubectl rollout undo deployment/api -n production-platform
-        kubectl rollout undo deployment/worker -n production-platform
-        echo "Rollback initiated"
-        EOF
-        
-        aws ssm send-command \
-          --instance-ids "$INSTANCE_ID" \
-          --document-name "AWS-RunShellScript" \
-          --parameters "commands=[$(cat rollback.sh | jq -Rs .)]"
-        
         aws ssm send-command \
           --instance-ids "$INSTANCE_ID" \
           --document-name "AWS-RunShellScript" \
           --parameters '{
             "commands": [
-              "kubectl rollout undo deployment/api -n production-platform",
-              "kubectl rollout undo deployment/worker -n production-platform",
+              "kubectl rollout undo deployment/api -n production-platform || true",
+              "kubectl rollout undo deployment/worker -n production-platform || true",
               "echo \"Rollback initiated\""
             ]
           }'
