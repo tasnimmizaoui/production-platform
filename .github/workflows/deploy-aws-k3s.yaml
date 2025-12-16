@@ -110,50 +110,30 @@ jobs:
       run: |
         echo "🚀 Deploying to K3s cluster..."
         
-        # Create deployment script
-        cat > deploy-commands.sh << 'EOF'
-        #!/bin/bash
-        set -e
-        
-        echo "📦 Starting deployment to K3s..."
-        
-        # Update to latest images
-        echo "🔄 Updating API deployment..."
-        kubectl set image deployment/api \
-          api=${{ env.API_IMAGE }}:${{ github.sha }} \
-          -n production-platform
-        
-        echo "🔄 Updating Worker deployment..."
-        kubectl set image deployment/worker \
-          worker=${{ env.WORKER_IMAGE }}:${{ github.sha }} \
-          -n production-platform
-        
-        # Wait for rollouts
-        echo "⏳ Waiting for API rollout..."
-        kubectl rollout status deployment/api \
-          -n production-platform \
-          --timeout=180s
-        
-        echo "⏳ Waiting for Worker rollout..."
-        kubectl rollout status deployment/worker \
-          -n production-platform \
-          --timeout=180s
-        
-        # Verify deployment
-        echo "✅ Deployment complete! Pod status:"
-        kubectl get pods -n production-platform
-        
-        echo ""
-        echo "📊 Deployment details:"
-        kubectl describe deployment/api -n production-platform | grep -A 3 "Image:"
-        kubectl describe deployment/worker -n production-platform | grep -A 3 "Image:"
-        EOF
-        
-        # Execute deployment via SSM
+        # Execute deployment via SSM - using proper JSON format
         COMMAND_ID=$(aws ssm send-command \
           --instance-ids "$INSTANCE_ID" \
           --document-name "AWS-RunShellScript" \
-          --parameters "commands=[$(cat deploy-commands.sh | jq -Rs .)]" \
+          --parameters '{
+            "commands": [
+              "set -e",
+              "echo \"📦 Starting deployment to K3s...\"",
+              "echo \"🔄 Updating API deployment...\"",
+              "kubectl set image deployment/api api=${{ env.API_IMAGE }}:${{ github.sha }} -n production-platform",
+              "echo \"🔄 Updating Worker deployment...\"",
+              "kubectl set image deployment/worker worker=${{ env.WORKER_IMAGE }}:${{ github.sha }} -n production-platform",
+              "echo \"⏳ Waiting for API rollout...\"",
+              "kubectl rollout status deployment/api -n production-platform --timeout=180s",
+              "echo \"⏳ Waiting for Worker rollout...\"",
+              "kubectl rollout status deployment/worker -n production-platform --timeout=180s",
+              "echo \"✅ Deployment complete! Pod status:\"",
+              "kubectl get pods -n production-platform",
+              "echo \"\"",
+              "echo \"📊 Deployment details:\"",
+              "kubectl describe deployment/api -n production-platform | grep -A 3 \"Image:\"",
+              "kubectl describe deployment/worker -n production-platform | grep -A 3 \"Image:\""
+            ]
+          }' \
           --comment "GitHub Actions K3s Deployment" \
           --query 'Command.CommandId' \
           --output text)
@@ -164,7 +144,15 @@ jobs:
         echo "⏳ Waiting for deployment to complete..."
         aws ssm wait command-executed \
           --command-id "$COMMAND_ID" \
-          --instance-id "$INSTANCE_ID"
+          --instance-id "$INSTANCE_ID" || {
+          echo "❌ Deployment command failed. Fetching error details..."
+          aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$INSTANCE_ID" \
+            --query 'StandardErrorContent' \
+            --output text
+          exit 1
+        }
         
         # Get command output
         echo "📋 Deployment output:"
@@ -180,30 +168,19 @@ jobs:
       run: |
         echo "🏥 Running health checks..."
         
-        # Health check script
-        cat > health-check.sh << 'EOF'
-        #!/bin/bash
-        
-        echo "Testing API health endpoint..."
-        kubectl run test-health --rm -i --restart=Never \
-          --image=curlimages/curl:latest \
-          --namespace=production-platform \
-          -- curl -f -s http://api:8080/health || echo "API health check failed"
-        
-        echo ""
-        echo "Current pod status:"
-        kubectl get pods -n production-platform -o wide
-        
-        echo ""
-        echo "Recent events:"
-        kubectl get events -n production-platform --sort-by='.lastTimestamp' | tail -10
-        EOF
-        
         # Execute health check
         COMMAND_ID=$(aws ssm send-command \
           --instance-ids "$INSTANCE_ID" \
           --document-name "AWS-RunShellScript" \
-          --parameters "commands=[$(cat health-check.sh | jq -Rs .)]" \
+          --parameters '{
+            "commands": [
+              "echo \"Current pod status:\"",
+              "kubectl get pods -n production-platform -o wide",
+              "echo \"\"",
+              "echo \"Recent events:\"",
+              "kubectl get events -n production-platform --sort-by=.lastTimestamp | tail -10"
+            ]
+          }' \
           --query 'Command.CommandId' \
           --output text)
         
@@ -247,4 +224,13 @@ jobs:
           --document-name "AWS-RunShellScript" \
           --parameters "commands=[$(cat rollback.sh | jq -Rs .)]"
         
-        echo "## ❌ Deployment Failed - Rollback Initiated" >> $GITHUB_STEP_SUMMARY
+        aws ssm send-command \
+          --instance-ids "$INSTANCE_ID" \
+          --document-name "AWS-RunShellScript" \
+          --parameters '{
+            "commands": [
+              "kubectl rollout undo deployment/api -n production-platform",
+              "kubectl rollout undo deployment/worker -n production-platform",
+              "echo \"Rollback initiated\""
+            ]
+          }'
