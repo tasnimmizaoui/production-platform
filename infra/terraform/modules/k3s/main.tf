@@ -39,6 +39,29 @@ resource "aws_iam_role_policy_attachment" "k3s_ssm" {
     policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+# S3 access for deployment pipeline
+resource "aws_iam_role_policy" "k3s_s3_access" {
+  name = "${var.environment}-k3s-s3-access"
+  role = aws_iam_role.k3s_node.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          "arn:aws:s3:::k3s-deploy-*",
+          "arn:aws:s3:::k3s-deploy-*/*"
+        ]
+      }
+    ]
+  })
+}
+
 # Instance profile : 
 resource "aws_iam_instance_profile" "k3s_node" {
      name_prefix = "${var.environment}-k3s-node"
