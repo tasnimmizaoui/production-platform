@@ -109,17 +109,19 @@ jobs:
     
     - name: Upload K8s Manifests to S3
       run: |
-        echo "📦 Uploading manifests to S3..."
+        echo "📦 Uploading manifests and deploy script to S3..."
         BUCKET_NAME="k3s-deploy-$(date +%s)"
         aws s3 mb s3://$BUCKET_NAME --region ${{ env.AWS_REGION }}
         
-        # Upload all manifests
+        # Upload manifests and deployment script
         tar czf manifests.tar.gz k8s/
         aws s3 cp manifests.tar.gz s3://$BUCKET_NAME/manifests.tar.gz
+        aws s3 cp scripts/k3s-deploy.sh s3://$BUCKET_NAME/k3s-deploy.sh
         
         echo "bucket-name=$BUCKET_NAME" >> $GITHUB_OUTPUT
       id: upload-manifests
     
+  
     - name: Deploy to K3s via SSM
       env:
         INSTANCE_ID: ${{ steps.get-instance.outputs.instance-id }}
@@ -127,49 +129,15 @@ jobs:
       run: |
         echo "🚀 Deploying to K3s cluster..."
         
-        # Execute deployment via SSM - using proper JSON format
+        # Execute deployment script via SSM - much simpler than inline JSON
         COMMAND_ID=$(aws ssm send-command \
           --instance-ids "$INSTANCE_ID" \
           --document-name "AWS-RunShellScript" \
-          --parameters '{
-            "commands": [
-              "set -e",
-              "cd /tmp",
-              "echo \"📥 Downloading manifests from S3...\"",
-              "aws s3 cp s3://'"$BUCKET_NAME"'/manifests.tar.gz .",
-              "tar xzf manifests.tar.gz",
-              "cd k8s/base",
-              "echo \"📦 Starting deployment to K3s...\"",
-              "echo \"🏥 Checking K3s health...\"",
-              "kubectl get nodes || { echo '❌ K3s API not responding'; exit 1; }",
-              "echo \"🔧 Creating namespace and configmap...\"",
-              "kubectl apply --validate=false -f namespace.yaml",
-              "kubectl apply --validate=false -f configmap.yaml",
-              "echo \"🔴 Deploying Redis...\"",
-              "kubectl apply --validate=false -f redis/",
-              "echo \"⏳ Waiting for Redis to be ready...\"",
-              "kubectl wait --for=condition=ready pod -l app=redis -n production-platform --timeout=120s || true",
-              "echo \"🔄 Updating image tags in manifests...\"",
-              "sed -i \"s|image: .*/production-platform-api:.*|image: '"${{ env.API_IMAGE }}:${{ github.sha }}"'|g\" api/deployment.yaml",
-              "sed -i \"s|image: .*/production-platform-worker:.*|image: '"${{ env.WORKER_IMAGE }}:${{ github.sha }}"'|g\" worker/deployment.yaml",
-              "echo \"🚀 Deploying API service...\"",
-              "kubectl apply --validate=false -f api/",
-              "echo \"⚙️ Deploying Worker service...\"",
-              "kubectl apply --validate=false -f worker/",
-              "echo \"⏳ Waiting for API rollout...\"",
-              "kubectl rollout status deployment/api -n production-platform --timeout=180s",
-              "echo \"⏳ Waiting for Worker rollout...\"",
-              "kubectl rollout status deployment/worker -n production-platform --timeout=180s",
-              "echo \"✅ Deployment complete! Pod status:\"",
-              "kubectl get pods -n production-platform -o wide",
-              "echo \"\"",
-              "echo \"📊 Deployment details:\"",
-              "kubectl get all -n production-platform",
-              "echo \"\"",
-              "echo \"🧹 Cleanup...\"",
-              "cd /tmp && rm -rf k8s manifests.tar.gz"
-            ]
-          }' \
+          --parameters "commands=[
+            'aws s3 cp s3://$BUCKET_NAME/k3s-deploy.sh /tmp/k3s-deploy.sh',
+            'chmod +x /tmp/k3s-deploy.sh',
+            '/tmp/k3s-deploy.sh $BUCKET_NAME ${{ env.API_IMAGE }} ${{ env.WORKER_IMAGE }} ${{ github.sha }}'
+          ]" \
           --comment "GitHub Actions K3s Deployment" \
           --query 'Command.CommandId' \
           --output text)
