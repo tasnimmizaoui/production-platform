@@ -21,11 +21,11 @@ echo "🏥 Checking K3s health..."
 kubectl get nodes || { echo '❌ K3s API not responding'; exit 1; }
 
 echo "🔧 Creating namespace and configmap..."
-kubectl apply --validate=false -f namespace.yaml
-kubectl apply --validate=false -f configmap.yaml
+kubectl apply --validate=false --request-timeout=60s -f namespace.yaml
+kubectl apply --validate=false --request-timeout=60s -f configmap.yaml
 
 echo "🔴 Deploying Redis..."
-kubectl apply --validate=false -f redis/
+kubectl apply --validate=false --request-timeout=60s -f redis/
 
 echo "⏳ Waiting for Redis to be ready..."
 kubectl wait --for=condition=ready pod -l app=redis -n production-platform --timeout=120s || true
@@ -35,10 +35,10 @@ sed -i "s|image: .*/production-platform-api:.*|image: ${API_IMAGE}:${GIT_SHA}|g"
 sed -i "s|image: .*/production-platform-worker:.*|image: ${WORKER_IMAGE}:${GIT_SHA}|g" worker/deployment.yaml
 
 echo "🚀 Deploying API service..."
-kubectl apply --validate=false -f api/
+kubectl apply --validate=false --request-timeout=60s -f api/
 
 echo "⚙️ Deploying Worker service..."
-kubectl apply --validate=false -f worker/
+kubectl apply --validate=false --request-timeout=60s -f worker/
 
 echo "⏳ Waiting for API rollout..."
 kubectl rollout status deployment/api -n production-platform --timeout=180s
