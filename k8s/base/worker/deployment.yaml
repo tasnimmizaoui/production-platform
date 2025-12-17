@@ -55,10 +55,10 @@ spec:
         # Worker resource allocation
         resources:
           requests:
-            memory: "64Mi"
+            memory: "48Mi"
             cpu: "50m"
           limits:
-            memory: "128Mi"
+            memory: 96Mi"
             cpu: "200m"
         
         livenessProbe:

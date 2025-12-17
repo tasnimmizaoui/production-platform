@@ -1,4 +1,4 @@
-name: Build and Push Images (ArgoCD GitOps)
+name: Deploy to AWS K3s (Imperative)
 
 on:
   #push:
@@ -9,6 +9,7 @@ on:
   workflow_dispatch:
 
 env:
+  AWS_REGION: us-east-1
   REGISTRY: docker.io
   API_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/production-platform-api
   WORKER_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/production-platform-worker
