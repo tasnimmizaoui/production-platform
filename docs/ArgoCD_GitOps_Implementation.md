@@ -55,7 +55,7 @@ curl -s https://raw.githubusercontent.com/tasnimmizaoui/production-platform/main
 
 Edit [argocd/application.yaml](../argocd/application.yaml) and replace:
 ```yaml
-repoURL: https://github.com/YOUR_USERNAME/production-platform.git
+repoURL: https://github.com/tasnimmizaoui/production-platform.git
 ```
 
 ### 3. Deploy ArgoCD Application
